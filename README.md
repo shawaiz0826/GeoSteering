@@ -17,7 +17,6 @@ A lightweight pipeline for ingesting well `.las` files, normalizing and modeling
 Geo/
 ├── run_geosteering.py    # CLI entry point and end-to-end processing
 ├── api.py                # FastAPI app exposing /process endpoint
-├── code.py               # Core processing logic
 ├── models/               # Required model files and normalization stats
 ├── outputs/              # Generated reports and plots
 ├── requirements.txt      # Python dependencies
