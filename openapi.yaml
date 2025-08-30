@@ -1,0 +1,202 @@
+openapi: 3.0.3
+info:
+  title: GeoSteering API
+  version: 1.0.0
+  description: |
+    API for processing LAS well logs and generating geosteering analytics.
+
+    Notes:
+    - The `/process` endpoint expects a `.las` file upload via multipart/form-data.
+    - If the Bi-LSTM forecaster is not available, processing returns 422.
+servers:
+  - url: http://localhost:8000
+    description: Local development server
+paths:
+  /health:
+    get:
+      summary: Health check
+      operationId: getHealth
+      responses:
+        '200':
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: ok
+  /process:
+    post:
+      summary: Process a LAS file
+      description: |
+        Ingests a `.las` file and runs pretrained models to produce window-level
+        forecasts, reservoir contact states, suggested actions, and risk metrics.
+        Returns a compact summary with artifact paths.
+      operationId: postProcess
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required:
+                - las_file
+              properties:
+                las_file:
+                  type: string
+                  format: binary
+                  description: LAS file to process (must have `.las` extension)
+                gr_target:
+                  type: number
+                  format: float
+                  default: 60.0
+                  description: Gamma Ray target value (gAPI)
+                gr_band:
+                  type: number
+                  format: float
+                  default: 15.0
+                  description: Half-width of acceptable GR band around target
+                show_samples:
+                  type: integer
+                  nullable: true
+                  description: |
+                    If provided, limits plots to first N samples; otherwise 'all'.
+                save_png:
+                  type: boolean
+                  default: true
+                  description: Whether to save a PNG dashboard per well
+                save_csv:
+                  type: boolean
+                  default: true
+                  description: Whether to save a per-window CSV per well
+                save_json:
+                  type: boolean
+                  default: true
+                  description: Whether to save a detailed JSON payload per well
+      responses:
+        '200':
+          description: Processing completed; summary and artifact references
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProcessResponse'
+        '400':
+          description: Bad request (e.g., wrong file extension)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          description: Processing failed to produce results (e.g., missing curves or unavailable forecaster)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /:
+    get:
+      summary: Root info
+      operationId: getRoot
+      responses:
+        '200':
+          description: Basic API information and available endpoints
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  name:
+                    type: string
+                    example: GeoSteering API
+                  endpoints:
+                    type: array
+                    items:
+                      type: string
+                    example:
+                      - /health
+                      - /process
+                  outputs_dir:
+                    type: string
+                    description: Absolute path where outputs are written
+components:
+  schemas:
+    ProcessResponse:
+      type: object
+      properties:
+        breakdown:
+          type: object
+          description: Count of windows by reservoir-contact state
+          properties:
+            outside:
+              type: integer
+              example: 123
+            in_zone:
+              type: integer
+              example: 456
+            approaching_exit:
+              type: integer
+              example: 78
+            exiting:
+              type: integer
+              example: 12
+          additionalProperties: false
+        json_path:
+          type: string
+          description: Filesystem path to the detailed per-well JSON payload (if saved)
+          example: /absolute/path/to/outputs/f3_json_Well123.json
+        summary:
+          type: object
+          description: High-level risk/contact summary
+          properties:
+            risk_p50:
+              type: number
+              format: float
+              example: 37.4
+            risk_p90:
+              type: number
+              format: float
+              example: 82.1
+            contact_final_pct:
+              type: number
+              format: float
+              description: Final cumulative in-zone percentage (0-100)
+              example: 63.2
+            breakdown:
+              type: object
+              description: Duplicate of `breakdown` for convenience
+              properties:
+                outside:
+                  type: integer
+                in_zone:
+                  type: integer
+                approaching_exit:
+                  type: integer
+                exiting:
+                  type: integer
+              additionalProperties: false
+            n_windows:
+              type: integer
+              example: 987
+            plan_overlay:
+              type: boolean
+              example: false
+          additionalProperties: true
+        well:
+          type: string
+          description: Well name (derived from filename)
+          example: Well123.las
+      required:
+        - breakdown
+        - summary
+        - well
+      additionalProperties: false
+    Error:
+      type: object
+      properties:
+        detail:
+          oneOf:
+            - type: string
+            - type: object
+      required:
+        - detail

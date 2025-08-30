@@ -1,0 +1,11 @@
+numpy>=1.23
+pandas>=1.5
+matplotlib>=3.6
+lasio>=0.31
+torch>=2.2
+
+# API server
+fastapi>=0.110
+uvicorn[standard]>=0.23
+pydantic>=2.0
+
